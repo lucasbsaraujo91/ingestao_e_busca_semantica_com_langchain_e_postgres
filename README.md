@@ -4,6 +4,7 @@
 Este projeto permite:
 - **Ingestão:** Ler um arquivo `document.pdf`, quebrar em *chunks* (1000 tokens / 150 de overlap), gerar embeddings e salvar tudo no Postgres com **pgvector**.  
 - **Busca:** Fazer perguntas via CLI e receber respostas **com base no conteúdo do PDF**, sem usar dados externos.
+- **Chat:** Interagir em modo conversacional com o conteúdo ingerido, como se fosse um assistente treinado apenas no seu PDF.
 
 ---
 
@@ -33,7 +34,8 @@ Este projeto permite:
 ├── src/
 │   ├── ingest.py
 │   ├── search.py
-│   └── test_search.py
+│   ├── test_search.py
+│   └── chat.py
 └── document.pdf
 ```
 
@@ -45,29 +47,20 @@ Crie um arquivo chamado `.env` na raiz do projeto com o conteúdo abaixo:
 
 ```bash
 # ===== Banco de dados =====
-# URL de conexão com o Postgres + pgvector
 PGVECTOR_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:5440/rag
-# Nome da coleção onde os embeddings serão armazenados
 PGVECTOR_COLLECTION=gpt5_collection
 
 # ===== OpenAI (padrão) =====
-# Sua chave de API da OpenAI (obrigatória se usar o provedor OpenAI)
 OPENAI_API_KEY=coloque_sua_chave_aqui
-# Modelo de embeddings
 OPENAI_MODEL=text-embedding-3-small
-# Modelo de chat
 OPENAI_CHAT_MODEL=gpt-5-nano
 
 # ===== Gemini (opcional) =====
-# Sua chave de API do Google (se for usar Gemini)
 GOOGLE_API_KEY=
-# Modelo de embeddings do Gemini
 GEMINI_EMBEDDING_MODEL=models/embedding-001
-# Modelo de chat do Gemini
 GEMINI_CHAT_MODEL=gemini-2.5-flash-lite
 
 # ===== Seletor de provedor =====
-# Define qual provedor será usado: "openai" ou "gemini"
 PROVIDER=openai
 ```
 
@@ -99,7 +92,7 @@ psql "postgresql://postgres:postgres@127.0.0.1:5440/rag"
 ---
 
 ### 2️⃣ (Opcional) Rodar o Python dentro de um container
-Se você quiser rodar a aplicação dentro de um container Python (sem precisar instalar dependências localmente), adicione no seu `docker-compose.yml` algo como:
+Se quiser rodar tudo dentro de um container Python (sem instalar dependências localmente), adicione no seu `docker-compose.yml` algo como:
 
 ```yaml
 services:
@@ -121,30 +114,58 @@ Depois suba novamente:
 docker compose up -d --build
 ```
 
-E entre no container para rodar os scripts:
+E entre no container:
 ```bash
 docker exec -it app bash
 ```
 
 ---
 
-### 3️⃣ Rodar os scripts (no host ou no container)
+## 🧾 Etapas do Projeto
 
-**Ingestão de documentos:**
+### 🧩 1️⃣ Ingestão de Documentos
+Execute:
 ```bash
 python3 src/ingest.py
 ```
-Isso vai:
+Isso irá:
 - Ler o arquivo `document.pdf`
-- Gerar os *chunks*
+- Gerar *chunks* (partes menores de texto)
 - Criar embeddings
-- Inserir os vetores no Postgres (coleção definida no `.env`)
+- Inserir tudo no Postgres na coleção configurada
 
-**Busca semântica (CLI):**
+---
+
+### 🔍 2️⃣ Busca Semântica (CLI)
+Para fazer perguntas sobre o conteúdo do PDF:
 ```bash
 python3 src/test_search.py
 ```
-O script fará uma pergunta e mostrará a resposta com base nos dados vetorizados.
+O script fará a busca vetorial no banco, recuperará os trechos mais relevantes e responderá com base apenas no conteúdo indexado.
+
+---
+
+### 💬 3️⃣ Usando o Chat
+Este modo permite uma **conversa interativa** com o conteúdo do seu PDF.
+
+Execute:
+```bash
+python3 src/chat.py
+```
+
+O sistema:
+- Carrega as embeddings salvas no Postgres  
+- Mantém o contexto entre as perguntas (memória de chat)  
+- Usa o modelo definido no `.env` (`OPENAI_CHAT_MODEL` ou `GEMINI_CHAT_MODEL`)  
+- Responde de forma conversacional sobre o conteúdo do documento
+
+#### 🧠 Exemplo de uso:
+```
+Usuário: Qual é o tema principal do documento?
+Assistente: O documento discute o processo de avaliação do GPT-5 e o compara ao GPT-4 em termos de raciocínio e consistência.
+Usuário: E como o GPT-5 se sai melhor?
+Assistente: O GPT-5 apresenta maior consistência em raciocínios complexos e múltiplos passos, além de reduzir a taxa de alucinações em relação ao GPT-4.
+```
 
 ---
 
@@ -152,7 +173,7 @@ O script fará uma pergunta e mostrará a resposta com base nos dados vetorizado
 
 | Comando | Descrição |
 |----------|------------|
-| `docker compose up -d` | Sobe os containers em background |
+| `docker compose up -d` | Sobe os containers em segundo plano |
 | `docker compose down` | Derruba todos os containers |
 | `docker compose logs -f` | Mostra os logs em tempo real |
 | `docker compose ps` | Mostra o status dos containers |
